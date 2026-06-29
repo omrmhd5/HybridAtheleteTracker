@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../providers/cardio_provider.dart';
-import '../../models/cardio_log_model.dart';
 import '../../core/constants/app_colors.dart';
-import '../../core/constants/app_text_styles.dart';
+import '../../models/cardio_log_model.dart';
+import '../../providers/cardio_provider.dart';
+import '../../widgets/common/common.dart';
 
 class LogCardioScreen extends StatefulWidget {
   const LogCardioScreen({super.key});
@@ -19,127 +19,122 @@ class _LogCardioScreenState extends State<LogCardioScreen> {
   final _notesController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
-  String _selectedType = 'run';
-  final List<String> _types = ['run', 'cycle', 'swim', 'other'];
+  String _type = 'run';
 
-  Future<void> _saveSession() async {
-    if (_formKey.currentState!.validate()) {
-      final cardioProvider = Provider.of<CardioProvider>(context, listen: false);
-
-      final session = CardioLogModel(
-        id: '',
-        date: DateTime.now(),
-        type: _selectedType,
-        durationMinutes: int.tryParse(_durationController.text) ?? 0,
-        distance: double.tryParse(_distanceController.text) ?? 0.0,
-        avgHeartRate: int.tryParse(_heartRateController.text),
-        notes: _notesController.text.trim(),
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    final cardioProvider = context.read<CardioProvider>();
+    final session = CardioLogModel(
+      id: '',
+      date: DateTime.now(),
+      type: _type,
+      durationMinutes: int.tryParse(_durationController.text) ?? 0,
+      distance: double.tryParse(_distanceController.text) ?? 0.0,
+      avgHeartRate: int.tryParse(_heartRateController.text),
+      notes: _notesController.text.trim(),
+    );
+    final success = await cardioProvider.logSession(session);
+    if (!mounted) return;
+    if (success) {
+      Navigator.pop(context);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(cardioProvider.error ?? 'Failed to log cardio'),
+          backgroundColor: AppColors.error,
+        ),
       );
-
-      final success = await cardioProvider.logSession(session);
-      if (success && mounted) {
-        Navigator.pop(context);
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(cardioProvider.error ?? 'Failed to log cardio'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final isLoading = context.watch<CardioProvider>().isLoading;
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Log Cardio'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.check),
-            onPressed: isLoading ? null : _saveSession,
-          ),
-        ],
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text('Log cardio'),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
+          padding: const EdgeInsets.all(16),
           child: Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Activity Type', style: AppTextStyles.bodyLarge),
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 8),
+                  child: SectionLabel('Activity type'),
+                ),
+                SegmentedControl<String>(
+                  value: _type,
+                  onChanged: (v) => setState(() => _type = v),
+                  options: const [
+                    SegmentOption(
+                        value: 'run', label: 'Run', icon: Icons.directions_run),
+                    SegmentOption(
+                        value: 'cycle',
+                        label: 'Cycle',
+                        icon: Icons.directions_bike),
+                    SegmentOption(value: 'swim', label: 'Swim', icon: Icons.pool),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                _field(_durationController, 'Duration (minutes)',
+                    icon: Icons.timer_outlined,
+                    number: true,
+                    validator: (v) =>
+                        v!.isEmpty ? 'Please enter duration' : null),
                 const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8.0,
-                  children: _types.map((type) {
-                    return ChoiceChip(
-                      label: Text(type.toUpperCase()),
-                      selected: _selectedType == type,
-                      onSelected: (selected) {
-                        if (selected) setState(() => _selectedType = type);
-                      },
-                      selectedColor: AppColors.primary,
-                      labelStyle: TextStyle(
-                        color: _selectedType == type ? Colors.white : AppColors.textSecondary,
-                      ),
-                    );
-                  }).toList(),
-                ),
+                _field(_distanceController, 'Distance (km)',
+                    icon: Icons.map_outlined, decimal: true),
+                const SizedBox(height: 12),
+                _field(_heartRateController, 'Avg heart rate (bpm)',
+                    icon: Icons.favorite_border, number: true),
+                const SizedBox(height: 12),
+                _field(_notesController, 'Notes (optional)',
+                    icon: Icons.notes, maxLines: 3),
                 const SizedBox(height: 24),
-                TextFormField(
-                  controller: _durationController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    hintText: 'Duration (minutes)',
-                    prefixIcon: Icon(Icons.timer_outlined),
-                  ),
-                  validator: (value) =>
-                      value!.isEmpty ? 'Please enter duration' : null,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _distanceController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    hintText: 'Distance (e.g., km or miles)',
-                    prefixIcon: Icon(Icons.map_outlined),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _heartRateController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    hintText: 'Average Heart Rate (bpm)',
-                    prefixIcon: Icon(Icons.favorite_border),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _notesController,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    hintText: 'Notes (optional)',
-                    prefixIcon: Icon(Icons.notes),
-                  ),
-                ),
-                const SizedBox(height: 32),
-                ElevatedButton(
-                  onPressed: isLoading ? null : _saveSession,
-                  child: isLoading
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text('Save Cardio'),
+                HAButton(
+                  label: 'Save cardio',
+                  fullWidth: true,
+                  loading: isLoading,
+                  onPressed: isLoading ? null : _save,
                 ),
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _field(
+    TextEditingController controller,
+    String hint, {
+    IconData? icon,
+    bool number = false,
+    bool decimal = false,
+    int maxLines = 1,
+    String? Function(String?)? validator,
+  }) {
+    return TextFormField(
+      controller: controller,
+      maxLines: maxLines,
+      keyboardType: decimal
+          ? const TextInputType.numberWithOptions(decimal: true)
+          : number
+              ? TextInputType.number
+              : TextInputType.text,
+      decoration: InputDecoration(
+        hintText: hint,
+        prefixIcon: icon != null ? Icon(icon) : null,
+      ),
+      validator: validator,
     );
   }
 }

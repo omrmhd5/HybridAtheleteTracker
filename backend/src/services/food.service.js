@@ -1,78 +1,98 @@
-const FoodLog = require('../models/FoodLog');
-const User = require('../models/User');
+const { supabaseAdmin } = require('../config/supabase');
+const { foodToApi, foodToRow } = require('../utils/mappers');
+
+const TABLE = 'food_logs';
 
 class FoodService {
   async logMeal(userId, mealData) {
-    // Determine if protein goal is met for the day
-    const user = await User.findById(userId);
-    const dailyGoal = user.dailyProteinGoal || 150;
+    // Daily protein goal from the user's profile.
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('daily_protein_goal')
+      .eq('id', userId)
+      .single();
+    const dailyGoal = (profile && profile.daily_protein_goal) || 150;
 
-    // Get today's logs to calculate total protein
+    // Today's window (based on the meal's date, defaulting to now).
     const startOfDay = new Date(mealData.date || Date.now());
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(startOfDay);
     endOfDay.setHours(23, 59, 59, 999);
 
-    const todaysLogs = await FoodLog.find({
-      userId,
-      date: { $gte: startOfDay, $lte: endOfDay }
-    });
+    const { data: todaysLogs, error: fetchError } = await supabaseAdmin
+      .from(TABLE)
+      .select('protein')
+      .eq('user_id', userId)
+      .gte('date', startOfDay.toISOString())
+      .lte('date', endOfDay.toISOString());
+    if (fetchError) throw new Error(fetchError.message);
 
-    const currentTotalProtein = todaysLogs.reduce((acc, log) => acc + log.protein, 0);
+    const currentTotalProtein = (todaysLogs || []).reduce((acc, log) => acc + (log.protein || 0), 0);
     const newTotalProtein = currentTotalProtein + (mealData.protein || 0);
+    const goalMet = newTotalProtein >= dailyGoal;
 
-    const meal = new FoodLog({
-      userId,
-      ...mealData,
-      proteinGoalMet: newTotalProtein >= dailyGoal
-    });
-    
-    await meal.save();
+    const { data: meal, error: insertError } = await supabaseAdmin
+      .from(TABLE)
+      .insert({ user_id: userId, ...foodToRow(mealData), protein_goal_met: goalMet })
+      .select('*')
+      .single();
+    if (insertError) throw new Error(insertError.message);
 
-    // If goal met with this meal, update previous logs for today
-    if (newTotalProtein >= dailyGoal && currentTotalProtein < dailyGoal) {
-      await FoodLog.updateMany(
-        { userId, date: { $gte: startOfDay, $lte: endOfDay } },
-        { proteinGoalMet: true }
-      );
+    // If this meal flipped the day over the goal, back-fill the day's rows.
+    if (goalMet && currentTotalProtein < dailyGoal) {
+      const { error: updateError } = await supabaseAdmin
+        .from(TABLE)
+        .update({ protein_goal_met: true })
+        .eq('user_id', userId)
+        .gte('date', startOfDay.toISOString())
+        .lte('date', endOfDay.toISOString());
+      if (updateError) throw new Error(updateError.message);
     }
 
-    return meal;
+    return foodToApi(meal);
   }
 
   async getLogs(userId, query) {
-    const filter = { userId };
-    
+    let q = supabaseAdmin.from(TABLE).select('*').eq('user_id', userId);
+
     if (query.date) {
-      const date = new Date(query.date);
-      date.setHours(0, 0, 0, 0);
-      const nextDay = new Date(date);
-      nextDay.setHours(23, 59, 59, 999);
-      
-      filter.date = { $gte: date, $lte: nextDay };
-    } else if (query.from || query.to) {
-      filter.date = {};
-      if (query.from) filter.date.$gte = new Date(query.from);
-      if (query.to) filter.date.$lte = new Date(query.to);
+      const start = new Date(query.date);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(start);
+      end.setHours(23, 59, 59, 999);
+      q = q.gte('date', start.toISOString()).lte('date', end.toISOString());
+    } else {
+      if (query.from) q = q.gte('date', new Date(query.from).toISOString());
+      if (query.to) q = q.lte('date', new Date(query.to).toISOString());
     }
 
-    return await FoodLog.find(filter).sort({ date: -1 });
+    const { data, error } = await q.order('date', { ascending: false });
+    if (error) throw new Error(error.message);
+    return data.map(foodToApi);
   }
 
   async updateMeal(userId, mealId, updateData) {
-    const meal = await FoodLog.findOneAndUpdate(
-      { _id: mealId, userId },
-      updateData,
-      { new: true }
-    );
-    if (!meal) throw new Error('Meal log not found');
-    return meal;
+    const { data, error } = await supabaseAdmin
+      .from(TABLE)
+      .update({ ...foodToRow(updateData), updated_at: new Date().toISOString() })
+      .eq('id', mealId)
+      .eq('user_id', userId)
+      .select('*')
+      .single();
+    if (error || !data) throw new Error('Meal log not found');
+    return foodToApi(data);
   }
 
   async deleteMeal(userId, mealId) {
-    const meal = await FoodLog.findOneAndDelete({ _id: mealId, userId });
-    if (!meal) throw new Error('Meal log not found');
-    return meal;
+    const { data, error } = await supabaseAdmin
+      .from(TABLE)
+      .delete()
+      .eq('id', mealId)
+      .eq('user_id', userId)
+      .select('*')
+      .single();
+    if (error || !data) throw new Error('Meal log not found');
+    return foodToApi(data);
   }
 }
 

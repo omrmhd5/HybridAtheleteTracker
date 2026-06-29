@@ -19,13 +19,13 @@ class TipsProvider extends ChangeNotifier {
 
   Future<void> fetchWeeklyTip() async {
     try {
-      print('--- FRONTEND: Fetching AI Weekly Tip ---');
+      debugPrint('--- FRONTEND: Fetching AI Weekly Tip ---');
       _setLoading(true);
       final response = await _apiService.client.get(ApiConstants.tipsWeekly);
       _currentTip = response.data['data'];
-      print('--- FRONTEND: AI Weekly Tip loaded successfully ---');
+      debugPrint('--- FRONTEND: AI Weekly Tip loaded successfully ---');
     } catch (e) {
-      print('--- FRONTEND: AI Weekly Tip Error --- $e');
+      debugPrint('--- FRONTEND: AI Weekly Tip Error --- $e');
       _setError(e.toString());
     } finally {
       _setLoading(false);
@@ -34,13 +34,13 @@ class TipsProvider extends ChangeNotifier {
 
   Future<void> fetchHistory() async {
     try {
-      print('--- FRONTEND: Fetching AI Tip History ---');
+      debugPrint('--- FRONTEND: Fetching AI Tip History ---');
       _setLoading(true);
       final response = await _apiService.client.get(ApiConstants.tipsHistory);
       _history = response.data['data'];
-      print('--- FRONTEND: AI Tip History loaded successfully ---');
+      debugPrint('--- FRONTEND: AI Tip History loaded successfully ---');
     } catch (e) {
-      print('--- FRONTEND: AI Tip History Error --- $e');
+      debugPrint('--- FRONTEND: AI Tip History Error --- $e');
       _setError(e.toString());
     } finally {
       _setLoading(false);

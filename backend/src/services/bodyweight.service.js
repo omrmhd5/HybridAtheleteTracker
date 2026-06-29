@@ -1,24 +1,26 @@
-const BodyWeight = require('../models/BodyWeight');
+const { supabaseAdmin } = require('../config/supabase');
+const { bodyWeightToApi, bodyWeightToRow } = require('../utils/mappers');
+
+const TABLE = 'body_weights';
 
 class BodyWeightService {
   async logWeight(userId, data) {
-    const log = new BodyWeight({
-      userId,
-      ...data
-    });
-    return await log.save();
+    const { data: row, error } = await supabaseAdmin
+      .from(TABLE)
+      .insert({ user_id: userId, ...bodyWeightToRow(data) })
+      .select('*')
+      .single();
+    if (error) throw new Error(error.message);
+    return bodyWeightToApi(row);
   }
 
   async getHistory(userId, query) {
-    const filter = { userId };
-    
-    if (query.from || query.to) {
-      filter.date = {};
-      if (query.from) filter.date.$gte = new Date(query.from);
-      if (query.to) filter.date.$lte = new Date(query.to);
-    }
-
-    return await BodyWeight.find(filter).sort({ date: -1 });
+    let q = supabaseAdmin.from(TABLE).select('*').eq('user_id', userId);
+    if (query.from) q = q.gte('date', new Date(query.from).toISOString());
+    if (query.to) q = q.lte('date', new Date(query.to).toISOString());
+    const { data, error } = await q.order('date', { ascending: false });
+    if (error) throw new Error(error.message);
+    return data.map(bodyWeightToApi);
   }
 }
 

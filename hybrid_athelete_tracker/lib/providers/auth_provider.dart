@@ -35,9 +35,12 @@ class AuthProvider extends ChangeNotifier {
         data: {'email': email, 'password': password},
       );
       
-      final token = response.data['data']['token'];
-      await _storageService.saveToken(token);
-      
+      final data = response.data['data'];
+      await _storageService.saveToken(data['token']);
+      if (data['refreshToken'] != null) {
+        await _storageService.saveRefreshToken(data['refreshToken']);
+      }
+
       await fetchProfile();
       if (_user == null) {
         return false;
@@ -58,10 +61,13 @@ class AuthProvider extends ChangeNotifier {
         ApiConstants.register,
         data: data,
       );
-      
-      final token = response.data['data']['token'];
-      await _storageService.saveToken(token);
-      
+
+      final responseData = response.data['data'];
+      await _storageService.saveToken(responseData['token']);
+      if (responseData['refreshToken'] != null) {
+        await _storageService.saveRefreshToken(responseData['refreshToken']);
+      }
+
       await fetchProfile();
       if (_user == null) {
         return false;
@@ -82,14 +88,14 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       _user = null;
-      await _storageService.deleteToken();
+      await _storageService.clearTokens();
       notifyListeners();
       _setError('Failed to fetch profile. Please log in again.');
     }
   }
 
   Future<void> logout() async {
-    await _storageService.deleteToken();
+    await _storageService.clearTokens();
     _user = null;
     notifyListeners();
   }

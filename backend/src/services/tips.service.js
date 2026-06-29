@@ -1,5 +1,6 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
-const Tip = require("../models/Tip");
+const { supabaseAdmin } = require("../config/supabase");
+const { tipToApi } = require("../utils/mappers");
 const dashboardService = require("./dashboard.service");
 const env = require("../config/env");
 
@@ -23,12 +24,17 @@ class TipsService {
     weekStart.setHours(0, 0, 0, 0);
 
     // Check if we already generated a tip for this week
-    let existingTip = await Tip.findOne({
-      userId,
-      weekStartDate: { $gte: weekStart },
-    });
+    const { data: existingTip } = await supabaseAdmin
+      .from("tips")
+      .select("*")
+      .eq("user_id", userId)
+      .gte("week_start_date", weekStart.toISOString())
+      .order("week_start_date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
     if (existingTip) {
-      return existingTip;
+      return tipToApi(existingTip);
     }
 
     // Generate new tip
@@ -43,7 +49,7 @@ class TipsService {
       try {
         const prompt = `
           You are a friendly sports coach. Analyze this athlete's last 7 days:
-          
+
           Lifting: ${summary.lifting.sessionsCount} sessions, ${summary.lifting.totalVolume} total volume lifted.
           Cardio: ${summary.cardio.sessionsCount} sessions, ${summary.cardio.totalMinutes} minutes total.
           Food: Hit protein goal on ${summary.food.daysGoalMet} out of ${summary.food.logsCount} tracked days.
@@ -65,19 +71,29 @@ class TipsService {
       }
     }
 
-    const newTip = new Tip({
-      userId,
-      weekStartDate: weekStart,
-      tipText,
-      dataSnapshot: summary,
-    });
+    const { data: newTip, error } = await supabaseAdmin
+      .from("tips")
+      .insert({
+        user_id: userId,
+        week_start_date: weekStart.toISOString(),
+        tip_text: tipText,
+        data_snapshot: summary,
+      })
+      .select("*")
+      .single();
 
-    await newTip.save();
-    return newTip;
+    if (error) throw new Error(error.message);
+    return tipToApi(newTip);
   }
 
   async getTipHistory(userId) {
-    return await Tip.find({ userId }).sort({ weekStartDate: -1 });
+    const { data, error } = await supabaseAdmin
+      .from("tips")
+      .select("*")
+      .eq("user_id", userId)
+      .order("week_start_date", { ascending: false });
+    if (error) throw new Error(error.message);
+    return data.map(tipToApi);
   }
 
   async chatWithCoach(userId, message, history = []) {
@@ -89,12 +105,12 @@ class TipsService {
       const summary = await dashboardService.getWeeklySummary(userId);
 
       const contextPrompt = `
-        You are a highly motivating, friendly, and expert fitness coach. 
+        You are a highly motivating, friendly, and expert fitness coach.
         The user you are talking to has the following stats from the last 7 days:
         - Lifting: ${summary.lifting.sessionsCount} sessions, ${summary.lifting.totalVolume} total volume.
         - Cardio: ${summary.cardio.sessionsCount} sessions, ${summary.cardio.totalMinutes} minutes.
         - Food: Met protein goal ${summary.food.daysGoalMet} out of ${summary.food.logsCount} days.
-        
+
         Use this context to give personalized, concise, and helpful advice. Keep answers relatively short (1-4 paragraphs) and engaging.
       `;
 

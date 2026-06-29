@@ -41,9 +41,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final chatProvider = context.watch<ChatProvider>();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('AI Coach'),
-      ),
+      appBar: AppBar(title: const Text('AI Coach')),
       body: Column(
         children: [
           Expanded(
@@ -51,7 +49,9 @@ class _ChatScreenState extends State<ChatScreen> {
                 ? Center(
                     child: Text(
                       'Ask your coach anything about your progress!',
-                      style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   )
                 : ListView.builder(
@@ -90,7 +90,9 @@ class _ChatScreenState extends State<ChatScreen> {
             bottomRight: Radius.circular(isUser ? 0 : 16),
           ),
         ),
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.75,
+        ),
         child: Text(
           text,
           style: TextStyle(
@@ -108,7 +110,7 @@ class _ChatScreenState extends State<ChatScreen> {
         color: AppColors.surface,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             offset: const Offset(0, -4),
             blurRadius: 16,
           ),
@@ -127,7 +129,10 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
                 filled: true,
                 fillColor: AppColors.surfaceLight,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
               ),
               textInputAction: TextInputAction.send,
               onSubmitted: (_) => _sendMessage(),

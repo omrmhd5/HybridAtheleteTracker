@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../../providers/lifting_provider.dart';
-import 'log_lifting_screen.dart';
 import '../../core/constants/app_colors.dart';
+import '../../providers/lifting_provider.dart';
+import '../../widgets/common/common.dart';
+import '../home/app_route.dart';
+import 'live_log_screen.dart';
 
 class LiftingScreen extends StatefulWidget {
   const LiftingScreen({super.key});
@@ -21,48 +23,60 @@ class _LiftingScreenState extends State<LiftingScreen> {
     });
   }
 
+  void _start() => context.pushScreen(const LiveLogScreen());
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Lifting Sessions')),
-      body: Consumer<LiftingProvider>(
-        builder: (context, provider, child) {
-          if (provider.isLoading && provider.sessions.isEmpty) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          
-          if (provider.sessions.isEmpty) {
-            return const Center(child: Text('No lifting sessions yet. Start logging!'));
-          }
-
-          return ListView.builder(
-            itemCount: provider.sessions.length,
-            padding: const EdgeInsets.all(16),
-            itemBuilder: (context, index) {
-              final session = provider.sessions[index];
-              return Card(
-                margin: const EdgeInsets.only(bottom: 16),
-                child: ListTile(
-                  title: Text(session.sessionName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text(
-                    '${DateFormat('MMM d, yyyy').format(session.date)} • ${session.exercises.length} exercises',
-                  ),
-                  trailing: const Icon(Icons.chevron_right, color: AppColors.textSecondary),
-                ),
-              );
-            },
-          );
-        },
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const LogLiftingScreen()),
-          );
-        },
-        child: const Icon(Icons.add),
-      ),
+    return Stack(
+      children: [
+        Consumer<LiftingProvider>(
+          builder: (context, provider, _) {
+            if (provider.isLoading && provider.sessions.isEmpty) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            return ListView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+              children: [
+                const SectionLabel('Recent sessions'),
+                const SizedBox(height: 10),
+                if (provider.sessions.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 60),
+                    child: Center(
+                      child: Text('No sessions yet — start your first workout.',
+                          style: TextStyle(color: AppColors.textMuted)),
+                    ),
+                  )
+                else
+                  for (final s in provider.sessions) ...[
+                    AppCard(
+                      interactive: true,
+                      onTap: _start,
+                      child: ListRow(
+                        icon: Icons.fitness_center,
+                        title: s.sessionName,
+                        subtitle:
+                            '${DateFormat('MMM d, yyyy').format(s.date)} · ${s.exercises.length} exercises',
+                        trailing: const Icon(Icons.chevron_right,
+                            size: 20, color: AppColors.textMuted),
+                      ),
+                    ),
+                    const SizedBox(height: 9),
+                  ],
+              ],
+            );
+          },
+        ),
+        Positioned(
+          right: 16,
+          bottom: 16,
+          child: HAFab(
+            icon: Icons.add,
+            label: 'Start workout',
+            onPressed: _start,
+          ),
+        ),
+      ],
     );
   }
 }

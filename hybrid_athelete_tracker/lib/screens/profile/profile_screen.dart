@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import '../../providers/auth_provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_text_styles.dart';
+import '../../core/constants/targets.dart';
+import '../../providers/auth_provider.dart';
+import '../../widgets/common/common.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -12,56 +14,92 @@ class ProfileScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: const Text('Profile'),
       ),
       body: Consumer<AuthProvider>(
-        builder: (context, authProvider, child) {
-          final user = authProvider.user;
+        builder: (context, auth, _) {
+          final user = auth.user;
           if (user == null) {
-            return const Center(child: Text('Loading profile...'));
+            return const Center(child: Text('Loading profile…'));
           }
+          final t = Targets.forUser(user);
+          final goals = [
+            ('Protein', '${t.protein}g'),
+            ('Daily calories', t.calories.toString()),
+            ('Cardio / week', '3×'),
+          ];
 
           return ListView(
-            padding: const EdgeInsets.all(24.0),
+            padding: const EdgeInsets.all(16),
             children: [
-              const CircleAvatar(
-                radius: 50,
-                backgroundColor: AppColors.primary,
-                child: Icon(Icons.person, size: 50, color: Colors.white),
+              Row(
+                children: [
+                  InitialsAvatar(text: initialsOf(user.name), size: 56),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(user.name,
+                            style: AppTextStyles.sans(
+                                size: 18, weight: FontWeight.w700)),
+                        Text('@${user.username}',
+                            style: AppTextStyles.sans(
+                                size: 13, color: AppColors.textMuted)),
+                      ],
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
-              Text(
-                user.name,
-                style: AppTextStyles.heading2,
-                textAlign: TextAlign.center,
-              ),
-              Text(
-                '@${user.username}',
-                style: AppTextStyles.bodyMedium,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 32),
-              
-              _buildProfileItem('Email', user.email, Icons.email_outlined),
-              const Divider(),
-              _buildProfileItem('Unit Preference', user.unitPreference.toUpperCase(), Icons.scale_outlined),
-              const Divider(),
-              _buildProfileItem('Daily Protein Goal', '${user.dailyProteinGoal}g', Icons.restaurant_outlined),
-              
-              const SizedBox(height: 48),
-              ElevatedButton.icon(
-                onPressed: () async {
-                  await authProvider.logout();
-                  if (context.mounted) {
-                    context.go('/login');
-                  }
-                },
-                icon: const Icon(Icons.logout),
-                label: const Text('Log Out'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.surfaceLight,
-                  foregroundColor: AppColors.error,
+              AppCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SectionLabel('Goals'),
+                    const SizedBox(height: 10),
+                    for (var i = 0; i < goals.length; i++)
+                      Container(
+                        padding: const EdgeInsets.symmetric(vertical: 9),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(
+                              color: i < goals.length - 1
+                                  ? AppColors.surfaceBorder
+                                  : Colors.transparent,
+                            ),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(goals[i].$1,
+                                style: AppTextStyles.sans(
+                                    size: 15, color: AppColors.textSecondary)),
+                            HABadge(goals[i].$2),
+                          ],
+                        ),
+                      ),
+                  ],
                 ),
+              ),
+              const SizedBox(height: 12),
+              _settingRow(Icons.monitor_weight, 'Body stats'),
+              _settingRow(Icons.straighten, 'Units & display',
+                  trailingText: user.unitPreference.toUpperCase()),
+              _settingRow(Icons.link, 'Connected apps'),
+              _settingRow(Icons.notifications, 'Reminders'),
+              _settingRow(
+                Icons.logout,
+                'Sign out',
+                onTap: () async {
+                  await auth.logout();
+                  if (context.mounted) context.go('/login');
+                },
               ),
             ],
           );
@@ -70,18 +108,25 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildProfileItem(String title, String value, IconData icon) {
+  Widget _settingRow(IconData icon, String label,
+      {String? trailingText, VoidCallback? onTap}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12.0),
-      child: Row(
-        children: [
-          Icon(icon, color: AppColors.textSecondary),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Text(title, style: AppTextStyles.bodyLarge),
-          ),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
-        ],
+      padding: const EdgeInsets.only(bottom: 9),
+      child: AppCard(
+        interactive: true,
+        onTap: onTap ?? () {},
+        child: ListRow(
+          icon: icon,
+          iconBg: AppColors.surfaceLight,
+          iconColor: AppColors.textSecondary,
+          title: label,
+          trailing: trailingText != null
+              ? Text(trailingText,
+                  style: AppTextStyles.sans(
+                      size: 13, color: AppColors.textMuted))
+              : const Icon(Icons.chevron_right,
+                  size: 20, color: AppColors.textMuted),
+        ),
       ),
     );
   }

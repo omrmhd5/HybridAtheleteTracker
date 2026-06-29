@@ -2,8 +2,8 @@ const authService = require('../services/auth.service');
 
 exports.register = async (req, res, next) => {
   try {
-    const token = await authService.register(req.body);
-    res.status(201).json({ success: true, data: { token } });
+    const tokens = await authService.register(req.body);
+    res.status(201).json({ success: true, data: tokens });
   } catch (error) {
     if (error.message.includes('already exists')) {
       return res.status(400).json({ success: false, error: error.message });
@@ -18,13 +18,23 @@ exports.login = async (req, res, next) => {
     if (!email || !password) {
       return res.status(400).json({ success: false, error: 'Email and password are required' });
     }
-    const token = await authService.login(email, password);
-    res.status(200).json({ success: true, data: { token } });
+    const tokens = await authService.login(email, password);
+    res.status(200).json({ success: true, data: tokens });
   } catch (error) {
     if (error.message.includes('Invalid')) {
       return res.status(401).json({ success: false, error: error.message });
     }
     next(error);
+  }
+};
+
+exports.refresh = async (req, res, next) => {
+  try {
+    const { refreshToken } = req.body;
+    const tokens = await authService.refresh(refreshToken);
+    res.status(200).json({ success: true, data: tokens });
+  } catch (error) {
+    return res.status(401).json({ success: false, error: error.message });
   }
 };
 

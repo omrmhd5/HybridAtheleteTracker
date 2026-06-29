@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'core/services/api_service.dart';
 import 'core/services/storage_service.dart';
+import 'core/services/onboarding_service.dart';
 import 'providers/auth_provider.dart';
 import 'providers/lifting_provider.dart';
 import 'providers/food_provider.dart';
@@ -13,6 +14,8 @@ import 'app.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await OnboardingService.load();
 
   final storageService = StorageService();
   final apiService = ApiService(storageService);

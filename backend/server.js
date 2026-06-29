@@ -1,18 +1,19 @@
 const app = require('./src/app');
-const { connectDB } = require('./src/config/db');
 const env = require('./src/config/env');
 
-const startServer = async () => {
-  try {
-    await connectDB();
-    
-    app.listen(env.PORT, () => {
-      console.log(`Server running on port ${env.PORT}`);
-    });
-  } catch (error) {
-    console.error('Failed to start server:', error);
+const startServer = () => {
+  const missing = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY']
+    .filter((key) => !env[key]);
+
+  if (missing.length) {
+    console.error(`Missing required environment variables: ${missing.join(', ')}`);
+    console.error('Set them in backend/.env (see backend/.env.example).');
     process.exit(1);
   }
+
+  app.listen(env.PORT, () => {
+    console.log(`Server running on port ${env.PORT}`);
+  });
 };
 
 startServer();

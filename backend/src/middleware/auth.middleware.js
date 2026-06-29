@@ -1,7 +1,6 @@
-const jwt = require('jsonwebtoken');
-const env = require('../config/env');
+const { supabaseAdmin } = require('../config/supabase');
 
-const authMiddleware = (req, res, next) => {
+const authMiddleware = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -9,9 +8,13 @@ const authMiddleware = (req, res, next) => {
     }
 
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, env.JWT_SECRET);
-    
-    req.user = decoded; // { userId }
+    const { data, error } = await supabaseAdmin.auth.getUser(token);
+
+    if (error || !data || !data.user) {
+      return res.status(401).json({ success: false, error: 'Invalid or expired token' });
+    }
+
+    req.user = { userId: data.user.id }; // same shape every controller already uses
     next();
   } catch (error) {
     return res.status(401).json({ success: false, error: 'Invalid or expired token' });

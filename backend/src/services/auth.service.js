@@ -1,69 +1,104 @@
-const User = require('../models/User');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const env = require('../config/env');
+const { supabaseAdmin, supabaseAnon } = require('../config/supabase');
+const { profileToApi, profileUpdateToRow } = require('../utils/mappers');
 
 class AuthService {
   async register(userData) {
     const { name, username, email, password, unitPreference, dailyProteinGoal } = userData;
 
-    // Check if user exists
-    const existingUser = await User.findOne({ $or: [{ email }, { username }] });
-    if (existingUser) {
-      throw new Error('User with this email or username already exists');
+    // Create the Supabase Auth user (email confirmation disabled so signup
+    // logs in immediately).
+    const { data: created, error: createError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true
+    });
+
+    if (createError) {
+      if (/already|exists|registered|duplicate/i.test(createError.message)) {
+        throw new Error('User with this email or username already exists');
+      }
+      throw new Error(createError.message);
     }
 
-    const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash(password, salt);
+    const userId = created.user.id;
 
-    const user = new User({
+    // Create the profile row. If it fails, roll back the auth user so the
+    // email/username isn't left orphaned.
+    const { error: profileError } = await supabaseAdmin.from('profiles').insert({
+      id: userId,
       name,
       username,
       email,
-      passwordHash,
-      unitPreference,
-      dailyProteinGoal
+      unit_preference: unitPreference || 'kg',
+      daily_protein_goal: dailyProteinGoal != null ? dailyProteinGoal : 150
     });
 
-    await user.save();
-    return this.generateToken(user._id);
+    if (profileError) {
+      await supabaseAdmin.auth.admin.deleteUser(userId);
+      if (profileError.code === '23505' || /duplicate|unique/i.test(profileError.message)) {
+        throw new Error('User with this email or username already exists');
+      }
+      throw new Error(profileError.message);
+    }
+
+    return this.signIn(email, password);
   }
 
   async login(email, password) {
-    const user = await User.findOne({ email });
-    if (!user) {
+    return this.signIn(email, password);
+  }
+
+  async signIn(email, password) {
+    const { data, error } = await supabaseAnon.auth.signInWithPassword({ email, password });
+    if (error || !data || !data.session) {
       throw new Error('Invalid email or password');
     }
+    return {
+      token: data.session.access_token,
+      refreshToken: data.session.refresh_token
+    };
+  }
 
-    const isMatch = await bcrypt.compare(password, user.passwordHash);
-    if (!isMatch) {
-      throw new Error('Invalid email or password');
+  async refresh(refreshToken) {
+    if (!refreshToken) {
+      throw new Error('Invalid or expired token');
     }
-
-    return this.generateToken(user._id);
+    const { data, error } = await supabaseAnon.auth.refreshSession({ refresh_token: refreshToken });
+    if (error || !data || !data.session) {
+      throw new Error('Invalid or expired token');
+    }
+    return {
+      token: data.session.access_token,
+      refreshToken: data.session.refresh_token
+    };
   }
 
   async getProfile(userId) {
-    const user = await User.findById(userId).select('-passwordHash');
-    if (!user) {
+    const { data, error } = await supabaseAdmin
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    if (error || !data) {
       throw new Error('User not found');
     }
-    return user;
+    return profileToApi(data);
   }
 
   async updateProfile(userId, updateData) {
-    // Only allow updating certain fields
-    const allowedUpdates = {};
-    if (updateData.name) allowedUpdates.name = updateData.name;
-    if (updateData.unitPreference) allowedUpdates.unitPreference = updateData.unitPreference;
-    if (updateData.dailyProteinGoal) allowedUpdates.dailyProteinGoal = updateData.dailyProteinGoal;
+    const row = profileUpdateToRow(updateData);
+    const { data, error } = await supabaseAdmin
+      .from('profiles')
+      .update(row)
+      .eq('id', userId)
+      .select('*')
+      .single();
 
-    const user = await User.findByIdAndUpdate(userId, allowedUpdates, { new: true }).select('-passwordHash');
-    return user;
-  }
-
-  generateToken(userId) {
-    return jwt.sign({ userId }, env.JWT_SECRET, { expiresIn: env.JWT_EXPIRES_IN });
+    if (error || !data) {
+      throw new Error('User not found');
+    }
+    return profileToApi(data);
   }
 }
 

@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+import '../../core/constants/app_colors.dart';
+import '../../core/constants/app_text_styles.dart';
+import '../../providers/tips_provider.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../lifting/lifting_screen.dart';
 import '../food/food_screen.dart';
 import '../cardio/cardio_screen.dart';
 import '../tips/tips_screen.dart';
+import '../plan/plan_screen.dart';
+import '../profile/profile_screen.dart';
+import 'app_route.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -14,59 +20,112 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _currentIndex = 0;
+  int _index = 0;
 
-  final List<Widget> _screens = const [
-    DashboardScreen(),
-    LiftingScreen(),
-    FoodScreen(),
-    CardioScreen(),
-    TipsScreen(),
+  static const _titles = [
+    'This week',
+    'Lifting',
+    'Today’s food',
+    'Cardio',
+    'AI coach',
   ];
+
+  static const _tabs = [
+    (Icons.dashboard_outlined, Icons.dashboard, 'Week'),
+    (Icons.fitness_center_outlined, Icons.fitness_center, 'Lift'),
+    (Icons.restaurant_outlined, Icons.restaurant, 'Food'),
+    (Icons.directions_run_outlined, Icons.directions_run, 'Cardio'),
+    (Icons.lightbulb_outline, Icons.lightbulb, 'Tips'),
+  ];
+
+  void _goTab(int i) => setState(() => _index = i);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Hybrid Athlete'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.person_outline),
-            onPressed: () => context.push('/profile'),
-          ),
+      appBar: _buildAppBar(),
+      body: IndexedStack(
+        index: _index,
+        children: [
+          DashboardScreen(onGoToTab: _goTab),
+          const LiftingScreen(),
+          const FoodScreen(),
+          const CardioScreen(),
+          const TipsScreen(),
         ],
       ),
-      body: _screens[_currentIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard_outlined),
-            activeIcon: Icon(Icons.dashboard),
-            label: 'Week',
+      bottomNavigationBar: _buildBottomNav(),
+    );
+  }
+
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      title: Text(_titles[_index]),
+      leading: _index == 0
+          ? IconButton(
+              icon: const Icon(Icons.event),
+              color: AppColors.textPrimary,
+              onPressed: () => context.pushScreen(const PlanScreen()),
+            )
+          : null,
+      actions: [
+        if (_index == 4)
+          IconButton(
+            icon: const Icon(Icons.refresh, color: AppColors.textMuted),
+            onPressed: () => context.read<TipsProvider>().fetchWeeklyTip(),
+          )
+        else
+          IconButton(
+            icon: const Icon(Icons.person_outline, color: AppColors.textMuted),
+            onPressed: () => context.pushScreen(const ProfileScreen()),
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.fitness_center_outlined),
-            activeIcon: Icon(Icons.fitness_center),
-            label: 'Lift',
+      ],
+    );
+  }
+
+  Widget _buildBottomNav() {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.surfaceBorder)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 64,
+          child: Row(
+            children: List.generate(_tabs.length, (i) {
+              final t = _tabs[i];
+              final active = i == _index;
+              return Expanded(
+                child: InkWell(
+                  onTap: () => _goTab(i),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        active ? t.$2 : t.$1,
+                        size: 24,
+                        color:
+                            active ? AppColors.primary : AppColors.textMuted,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        t.$3,
+                        style: AppTextStyles.sans(
+                          size: 11,
+                          weight: active ? FontWeight.w600 : FontWeight.w500,
+                          color:
+                              active ? AppColors.primary : AppColors.textMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.restaurant_outlined),
-            activeIcon: Icon(Icons.restaurant),
-            label: 'Food',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.directions_run_outlined),
-            activeIcon: Icon(Icons.directions_run),
-            label: 'Cardio',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.lightbulb_outline),
-            activeIcon: Icon(Icons.lightbulb),
-            label: 'Tips',
-          ),
-        ],
+        ),
       ),
     );
   }
